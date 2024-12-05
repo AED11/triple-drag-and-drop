@@ -1,6 +1,6 @@
 'use client'
 
-import React, { useEffect, useState } from 'react'
+import React, { useState, useEffect } from 'react'
 import { DragDropContext, Droppable, Draggable, DropResult } from '@hello-pangea/dnd'
 import { 
   Accordion, 
@@ -9,50 +9,23 @@ import {
   Box, 
   Card, 
   CardContent, 
-  Typography 
+  Typography,
+  CircularProgress 
 } from '@mui/material'
 import ExpandMoreIcon from '@mui/icons-material/ExpandMore'
 import DragIndicatorIcon from '@mui/icons-material/DragIndicator'
-import axios from 'axios'
+import { fetchCourseData } from '../utils/utils_fetchCourseData'
 
-interface Lesson {
-  id: string
-  title: string
-}
-
-interface Category {
-  id: string
-  title: string
-  lessons: Lesson[]
-}
-
-interface Topic {
-  id: string
-  title: string
-  categories: Category[]
-}
-
-
-
-export async function MuiTopicCategoryLessonAccordion() {
+export function MuiCourseDragDrop() {
   const [topics, setTopics] = useState([])
-
-  async function  getTopics() {
-    try{
-      const {data} = await axios.get("https://online-api.omuz.tj/api/admin/course/2/topics/v1", {headers: {
-        "Authorization" : "Bearer eyJ0eXAiOiJKV1QiLCJhbGciOiJIUzI1NiJ9.eyJpc3MiOiJodHRwczovL29ubGluZS1hcGkub211ei50ai9hcGkvbG9naW4iLCJpYXQiOjE3MzMyOTgyMjEsImV4cCI6MTczMzczMDIyMSwibmJmIjoxNzMzMjk4MjIxLCJqdGkiOiJuV2wxQTVyTkdpUGszSWdIIiwic3ViIjoiNDIiLCJwcnYiOiIyM2JkNWM4OTQ5ZjYwMGFkYjM5ZTcwMWM0MDA4NzJkYjdhNTk3NmY3IiwidXNlcl90eXBlIjoxLCJpc19waG9uZV92ZXJpZmllZCI6dHJ1ZSwiaXNfZW1haWxfdmVyaWZpZWQiOnRydWUsImVtYWlsIjoic3VwZXJhZG1pbkBnbWFpbC5jb20iLCJuYW1lIjoibnVydWxsbyBzdXBlciBhZG1pbiAifQ.nIc3cEBaWdR_tTW9SAYCCHU_FRn5RpIpR1UzBjLxQwE"
-      }})
-      setTopics(data?.course_topics_lessons?.topics)
-    }catch(error){
-      console.log(error)
-    }
-  }
-  console.log(topics)
+  const [loading, setLoading] = useState(true)
 
   useEffect(() => {
-    getTopics()
+    fetchCourseData().then((data) => {
+      setTopics(data)
+      setLoading(false)
+    })
   }, [])
-  
 
   const onDragEnd = (result: DropResult) => {
     const { source, destination, type } = result
@@ -68,68 +41,50 @@ export async function MuiTopicCategoryLessonAccordion() {
       const [sourceTopicId, sourceContentId] = source.droppableId.split('.')
       const [destTopicId, destContentId] = destination.droppableId.split('.')
 
-      const sourceTopic = newTopics.find(topic => topic.id === sourceTopicId)
-      const destTopic = newTopics.find(topic => topic.id === destTopicId)
+      const sourceTopicIndex = newTopics.findIndex(topic => topic.id === sourceTopicId)
+      const destTopicIndex = newTopics.findIndex(topic => topic.id === destTopicId)
 
-      if (sourceTopic && destTopic) {
-        const sourceCategories = [...sourceTopic.categories]
-        const destCategories = sourceTopicId === destTopicId ? sourceCategories : [...destTopic.categories]
+      const sourceCategories = [...newTopics[sourceTopicIndex].categories]
+      const destCategories = sourceTopicIndex === destTopicIndex ? sourceCategories : [...newTopics[destTopicIndex].categories]
 
-        const [movedCategory] = sourceCategories.splice(source.index, 1)
-        destCategories.splice(destination.index, 0, movedCategory)
+      const [movedCategory] = sourceCategories.splice(source.index, 1)
+      destCategories.splice(destination.index, 0, movedCategory)
 
-        newTopics = newTopics?.map(topic => {
-          if (topic.id === sourceTopicId) {
-            return { ...topic, categories: sourceCategories }
-          }
-          if (topic.id === destTopicId) {
-            return { ...topic, categories: destCategories }
-          }
-          return topic
-        })
+      newTopics[sourceTopicIndex] = { ...newTopics[sourceTopicIndex], categories: sourceCategories }
+      if (sourceTopicIndex !== destTopicIndex) {
+        newTopics[destTopicIndex] = { ...newTopics[destTopicIndex], categories: destCategories }
       }
     } else if (type === 'lesson') {
       const [sourceTopicId, sourceCategoryId] = source.droppableId.split('.')
       const [destTopicId, destCategoryId] = destination.droppableId.split('.')
 
-      const sourceTopic = newTopics.find(topic => topic.id === sourceTopicId)
-      const destTopic = newTopics.find(topic => topic.id === destTopicId)
+      const sourceTopicIndex = newTopics.findIndex(topic => topic.id === sourceTopicId)
+      const destTopicIndex = newTopics.findIndex(topic => topic.id === destTopicId)
 
-      if (sourceTopic && destTopic) {
-        const sourceCategory = sourceTopic.categories.find(category => category.id === sourceCategoryId)
-        const destCategory = destTopic.categories.find(category => category.id === destCategoryId)
+      const sourceCategoryIndex = newTopics[sourceTopicIndex].categories.findIndex(category => category.id === sourceCategoryId)
+      const destCategoryIndex = newTopics[destTopicIndex].categories.findIndex(category => category.id === destCategoryId)
 
-        if (sourceCategory && destCategory) {
-          const sourceLessons = [...sourceCategory.lessons]
-          const destLessons = source.droppableId === destination.droppableId ? sourceLessons : [...destCategory.lessons]
+      const sourceLessons = [...newTopics[sourceTopicIndex].categories[sourceCategoryIndex].lessons]
+      const destLessons = sourceTopicIndex === destTopicIndex && sourceCategoryIndex === destCategoryIndex
+        ? sourceLessons
+        : [...newTopics[destTopicIndex].categories[destCategoryIndex].lessons]
 
-          const [movedLesson] = sourceLessons.splice(source.index, 1)
-          destLessons.splice(destination.index, 0, movedLesson)
+      const [movedLesson] = sourceLessons.splice(source.index, 1)
+      destLessons.splice(destination.index, 0, movedLesson)
 
-          newTopics = newTopics.map(topic => {
-            if (topic.id === sourceTopicId) {
-              return {
-                ...topic,
-                categories: topic.categories.map(category => 
-                  category.id === sourceCategoryId ? { ...category, lessons: sourceLessons } : category
-                )
-              }
-            }
-            if (topic.id === destTopicId) {
-              return {
-                ...topic,
-                categories: topic.categories.map(category => 
-                  category.id === destCategoryId ? { ...category, lessons: destLessons } : category
-                )
-              }
-            }
-            return topic
-          })
-        }
-      }
+      newTopics[sourceTopicIndex].categories[sourceCategoryIndex].lessons = sourceLessons
+      newTopics[destTopicIndex].categories[destCategoryIndex].lessons = destLessons
     }
 
     setTopics(newTopics)
+  }
+
+  if (loading) {
+    return (
+      <Box sx={{ display: 'flex', justifyContent: 'center', alignItems: 'center', height: '100vh' }}>
+        <CircularProgress />
+      </Box>
+    )
   }
 
   return (
@@ -138,7 +93,7 @@ export async function MuiTopicCategoryLessonAccordion() {
         <Droppable droppableId="topics" type="topic">
           {(provided) => (
             <div ref={provided.innerRef} {...provided.droppableProps}>
-              {topics?.map((topic, index) => (
+              {topics.map((topic, index) => (
                 <Draggable key={topic.id} draggableId={topic.id} index={index}>
                   {(provided) => (
                     <Accordion
@@ -155,7 +110,7 @@ export async function MuiTopicCategoryLessonAccordion() {
                           <Box {...provided.dragHandleProps} sx={{ mr: 1 }}>
                             <DragIndicatorIcon />
                           </Box>
-                          <Typography variant="h6">{topic?.topic_name}</Typography>
+                          <Typography variant="h6">{topic.title}</Typography>
                         </Box>
                       </AccordionSummary>
                       <AccordionDetails>
@@ -179,7 +134,7 @@ export async function MuiTopicCategoryLessonAccordion() {
                                           <Box {...provided.dragHandleProps} sx={{ mr: 1 }}>
                                             <DragIndicatorIcon />
                                           </Box>
-                                          <Typography variant="subtitle1">{category.name}</Typography>
+                                          <Typography variant="subtitle1">{category.title}</Typography>
                                         </Box>
                                       </AccordionSummary>
                                       <AccordionDetails>
@@ -207,7 +162,7 @@ export async function MuiTopicCategoryLessonAccordion() {
                                                           }}
                                                         >
                                                           <DragIndicatorIcon sx={{ mr: 1 }} />
-                                                          <Typography variant="body2">{lesson.name}</Typography>
+                                                          <Typography variant="body2">{lesson.title}</Typography>
                                                         </Box>
                                                       )}
                                                     </Draggable>
